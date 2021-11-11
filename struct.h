@@ -72,3 +72,22 @@ struct NewPlayerPositionMsg
 	Coordinate  pos;  //New object position 
 	Coordinate  dir;  //New object direction 
 };
+
+enum EventType
+{
+	Move
+};
+// Included  first in all Event messages 
+struct EventMsg
+{
+	MsgHead  head;
+	EventType  type;
+};
+
+struct MoveEvent
+{
+	EventMsg event; 
+	Coordinate pos; //New object position 
+	Coordinate dir; //New object direction 
+
+};
