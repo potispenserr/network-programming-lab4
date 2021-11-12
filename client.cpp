@@ -16,14 +16,18 @@
 #pragma comment (lib, "Ws2_32.lib")
 #pragma comment (lib, "Mswsock.lib")
 #pragma comment (lib, "AdvApi32.lib")
+#pragma warning(disable:4996) 
 
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "49152"
+#define DEFAULT_GUI_PORT 4445
 #define SERVERIP "130.240.40.25"
+#define GUISERVER "127.0.0.1"
 #define KEY_UP 72
 #define KEY_DOWN 80
 #define KEY_LEFT 75
 #define KEY_RIGHT 77
+#define KEY_Q 113
 
 int recieveID(SOCKET ConnectSocket) {
     MsgHead* msghead;
@@ -108,16 +112,114 @@ std::string deSerialize(char* recvbuf) {
     }
     return std::string("Beats me");
 }
+void sendMoveMessageToServers(std::string direction, int &playerX, int &playerY, int ID, int &seq_num, SOCKET ConnectSocket, int s, int slen, sockaddr_in client) {
+
+    MoveEvent movemsg;
+    if (direction == "Up") {
+        movemsg.pos.x = playerX;
+        movemsg.pos.y = playerY - 1;
+    }
+    else if (direction == "Down") {
+        movemsg.pos.x = playerX;
+        movemsg.pos.y = playerY + 1;
+
+    }
+    else if (direction == "Left") {
+        movemsg.pos.x = playerX - 1;
+        movemsg.pos.y = playerY;
+    }
+    else if (direction == "Right") {
+        movemsg.pos.x = playerX + 1;
+        movemsg.pos.y = playerY;
+    }
+
+    else {
+        std::cout << "You picked the wrong direction, fool" << "\n";
+    }
+    movemsg.event.type = Move;
+    movemsg.event.head.id = ID;
+    movemsg.event.head.seq_no = seq_num;
+    movemsg.event.head.type = Event;
+    movemsg.event.head.length = sizeof(movemsg);
+    char sendbuffer[sizeof(movemsg)];
+
+    std::cout << "size of movemsg was " << sizeof(movemsg) << "\n";
+
+    memcpy((void*)sendbuffer, (void*)&movemsg, sizeof(movemsg));
+
+    int iResult;
+
+    iResult = send(ConnectSocket, sendbuffer, sizeof(sendbuffer), 0);
+    std::cout << "Message sent was: " << sizeof(sendbuffer) << "\n";
+    if (iResult == SOCKET_ERROR) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return;
+    }
+    printf("Bytes Sent: %ld\n", iResult);
+    seq_num++;
+    std::future<char*> ret = std::async(std::launch::async, recieveOnce, ConnectSocket);
+    char* recievebuffer = ret.get();
+    //std::async(std::launch::async, recieveOnce, ConnectSocket);
+    std::cout << "Pos before deSerialize X: " << playerX << " Y: " << playerY << "\n";
+    std::string messageType = deSerialize(recievebuffer);
+    if (messageType == "NewPlayerPositionMsg") {
+
+        //playerY--;
+        NewPlayerPositionMsg* playerpos;
+        std::cout << "It was I NewPlayerPosition" << "\n";
+        playerpos = (NewPlayerPositionMsg*)recievebuffer;
+
+        //check if server returned the same coordinates because of invalid move
+        if (playerpos->pos.x == playerX && playerpos->pos.y == playerY) {
+            std::cout << "INVALID MOVE IDIOT" << "\n";
+            return;
+        }
+
+        //if the move was valid
+        playerX = playerpos->pos.x;
+        playerY = playerpos->pos.y;
+
+        int newPlayerX = playerpos->pos.x + 100;
+        int newPlayerY = playerpos->pos.y + 100;
+
+        std::cout << "playerID after deSerialize: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
+        std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + std::string("Magenta");
+
+        // send the message
+        std::cout << "Message sent was " << message << "\n";
+        if (sendto(s, message.c_str(), strlen(message.c_str()), 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
+        {
+            printf("sendto() failed with error code: %d", WSAGetLastError());
+            return;
+        }
+        message.clear();
+    }
+    
+
+}
 
 int __cdecl main(int argc, char** argv)
 {
     
+    system("title UDP Client for Twitch plays pixel art");
+
+    // initialise winsock
+    WSADATA wsa;
+    printf("Initialising Winsock...");
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+    {
+        printf("Failed. Error Code: %d", WSAGetLastError());
+        return 1;
+    }
+    printf("Initialised.\n");
 
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo* result = NULL,
+    struct addrinfo* result = NULL, * resultUDP = NULL,
         * ptr = NULL,
-        hints;
+        hints, hintsUDP;
     //const char* sendbuf = "this is a test";
     int ID;
 
@@ -127,7 +229,7 @@ int __cdecl main(int argc, char** argv)
     join.head.length = sizeof(join);
     join.head.type = Join;
     join.head.seq_no = seq_num;
-    int playerX = -100;
+    int playerX = -99;
     int playerY = -100;
     char sendbuf[sizeof(join)];
     memcpy((void*)sendbuf, (void*)&join, sizeof(join));
@@ -149,6 +251,23 @@ int __cdecl main(int argc, char** argv)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
+    // create socket
+    sockaddr_in client;
+    int s, slen = sizeof(client);
+    if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == SOCKET_ERROR)
+    {
+        printf("socket() failed with error code: %d", WSAGetLastError());
+        return 2;
+    }
+
+    // setup address structure
+    memset((char*)&client, 0, sizeof(client));
+    client.sin_family = AF_INET;
+    client.sin_port = htons(DEFAULT_GUI_PORT);
+    client.sin_addr.S_un.S_addr = inet_addr(GUISERVER);
+
+
+
     // Resolve the server address and port
     iResult = getaddrinfo(SERVERIP, DEFAULT_PORT, &hints, &result);
     if (iResult != 0) {
@@ -156,6 +275,8 @@ int __cdecl main(int argc, char** argv)
         WSACleanup();
         return 1;
     }
+
+
 
     // Attempt to connect to an address until one succeeds
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
@@ -194,7 +315,7 @@ int __cdecl main(int argc, char** argv)
         printf("send failed with error: %d\n", WSAGetLastError());
         closesocket(ConnectSocket);
         WSACleanup();
-        return 1;
+        //return 1;
     }
 
     printf("Bytes Sent: %ld\n", iResult);
@@ -204,14 +325,7 @@ int __cdecl main(int argc, char** argv)
     ID = ret.get();
     std::cout << "ID got from thread is " << ID << "\n";
 
-    // shutdown the connection since no more data will be sent
-    /*iResult = shutdown(ConnectSocket, SD_SEND);
-    if (iResult == SOCKET_ERROR) {
-        printf("shutdown failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
-        WSACleanup();
-        return 1;
-    }*/
+    
 
     //std::cout << "receiving" << "\n";
     // Receive until the peer closes the connection
@@ -225,58 +339,28 @@ int __cdecl main(int argc, char** argv)
 
         switch (key) {
         case KEY_UP: {
-            std::cout << "Up" << std::endl;//key up
-            /*EventMsg eventmsg;
-            eventmsg.head.id = 0;
-            eventmsg.head.length = sizeof(eventmsg);
-            eventmsg.head.type = Event;
-            eventmsg.head.seq_no = seq_num;
-            seq_num++;*/
-            
-            MoveEvent movemsg;
-            playerY++;
-            movemsg.pos.x = playerX;
-            movemsg.pos.y = playerY;
-            movemsg.event.type = Move;
-            movemsg.event.head.id = ID;
-            movemsg.event.head.seq_no = seq_num;
-            movemsg.event.head.type = Event;
-            movemsg.event.head.length = sizeof(movemsg);
-            char sendbuffer[sizeof(movemsg)];
-
-            std::cout << "size of movemsg was " << sizeof(movemsg) << "\n";
-
-            memcpy((void*)sendbuffer, (void*)&movemsg, sizeof(movemsg));
-
-            iResult = send(ConnectSocket, sendbuffer, sizeof(sendbuffer), 0);
-            std::cout << "Message sent was: " << sizeof(sendbuffer) << "\n";
-            if (iResult == SOCKET_ERROR) {
-                printf("send failed with error: %d\n", WSAGetLastError());
-                closesocket(ConnectSocket);
-                WSACleanup();
-                return 1;
-            }
-            printf("Bytes Sent: %ld\n", iResult);
-            //seq_num++;
-            std::future<char*> ret = std::async(std::launch::async, recieveOnce, ConnectSocket);
-            char* recievebuffer = ret.get();
-            //std::async(std::launch::async, recieveOnce, ConnectSocket);
-            deSerialize(recievebuffer);
-
+            //sendMoveMessageToServers(std::string direction, int& playerX, int& playerY, int ID, int& seq_num, SOCKET ConnectSocket, int s, int slen, sockaddr_in client) {
+            sendMoveMessageToServers(std::string("Up"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
         }
         break;
         case KEY_DOWN: {
-
-            std::cout << "Down" << std::endl;   // key down
+            sendMoveMessageToServers(std::string("Down"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
         }
             break;
         case KEY_LEFT: {
             std::cout << "Left" << std::endl;  // key left
+            sendMoveMessageToServers(std::string("Left"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
 
         }
             break;
         case KEY_RIGHT: {
-            std::cout << "Right" << std::endl;  // key right
+            sendMoveMessageToServers(std::string("Right"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
+            
+        }
+        break;
+
+        case KEY_Q: {
+            std::cout << "It's quitting time" << "\n";
             LeaveMsg leave;
             leave.head.id = ID;
             leave.head.type = Leave;
@@ -292,14 +376,28 @@ int __cdecl main(int argc, char** argv)
                 WSACleanup();
                 return 1;
             }
+
+            // shutdown the connection since no more data will be sent
+            iResult = shutdown(ConnectSocket, SD_SEND);
+            if (iResult == SOCKET_ERROR) {
+                printf("shutdown failed with error: %d\n", WSAGetLastError());
+                closesocket(ConnectSocket);
+                WSACleanup();
+                return 1;
+            }
             run = false;
         }
         break;
 
+        default: {
+            std::cout << "All you had to do was press the right key CJ" << "\n";
         }
+
+        }
+        
     }
     
-    do {
+    /*do {
 
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
         std::cout << "Sizeof recvbuffer: " << sizeof(recvbuf) << "\n";
@@ -328,7 +426,7 @@ int __cdecl main(int argc, char** argv)
         else
             printf("recv failed with error: %d\n", WSAGetLastError());
         
-    } while (true);
+    } while (true);*/
 
    /* LeaveMsg leave;
     leave.head.id = 0;
