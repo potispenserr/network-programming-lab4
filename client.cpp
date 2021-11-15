@@ -31,6 +31,7 @@
 
 int recieveID(SOCKET ConnectSocket) {
     MsgHead* msghead;
+    int ID = 0;
     for (int i = 0; i < 2; i++) {
         std::cout << "starting thread" << "\n";
         char recvbuf[DEFAULT_BUFLEN];
@@ -39,13 +40,17 @@ int recieveID(SOCKET ConnectSocket) {
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
         std::cout << "Sizeof recvbuffer: " << sizeof(recvbuf) << "\n";
         msghead = (MsgHead*)recvbuf;
+        if (ID == 0) {
+            ID = msghead->id;
+            std::cout << "set id to " << ID << "\n";
+        }
         std::cout << "message head type is: " << msghead->type << "\n";
         std::cout << "message head id is: " << msghead->id << "\n";
         std::cout << "message head length is: " << msghead->length << "\n";
         std::cout << "message head sequence number is: " << msghead->seq_no << "\n";
 
     }
-    return msghead->id;
+    return ID;
 }
 auto recieveOnce(SOCKET ConnectSocket) {
     std::cout << "starting thread RecieveOnce" << "\n";
@@ -112,7 +117,7 @@ std::string deSerialize(char* recvbuf) {
     }
     return std::string("Beats me");
 }
-void sendMoveMessageToServers(std::string direction, int &playerX, int &playerY, int ID, int &seq_num, SOCKET ConnectSocket, int s, int slen, sockaddr_in client) {
+void sendMoveMessageToServers(std::string direction, int &playerX, int &playerY, int ID, int &seq_num, SOCKET ConnectSocket, int s, int slen, sockaddr_in client, std::string playerColor) {
 
     MoveEvent movemsg;
     if (direction == "Up") {
@@ -185,7 +190,7 @@ void sendMoveMessageToServers(std::string direction, int &playerX, int &playerY,
         int newPlayerY = playerpos->pos.y + 100;
 
         std::cout << "playerID after deSerialize: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
-        std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + std::string("Magenta");
+        std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + playerColor;
 
         // send the message
         std::cout << "Message sent was " << message << "\n";
@@ -231,6 +236,7 @@ int __cdecl main(int argc, char** argv)
     join.head.seq_no = seq_num;
     int playerX = -99;
     int playerY = -100;
+    std::string playerColor;
     char sendbuf[sizeof(join)];
     memcpy((void*)sendbuf, (void*)&join, sizeof(join));
 
@@ -325,6 +331,44 @@ int __cdecl main(int argc, char** argv)
     ID = ret.get();
     std::cout << "ID got from thread is " << ID << "\n";
 
+    switch (ID) {
+    case 4: {
+        playerColor = "Magenta";
+        break;
+        }
+    case 5: {
+        playerColor = "Black";
+        break;
+    }
+    case 6: {
+        playerColor = "Blue";
+        break;
+    }
+    case 7: {
+        playerColor = "Yellow";
+        break;
+    }
+    case 8: {
+        playerColor = "Red";
+        break;
+    }
+    case 9: {
+        playerColor = "Cyan";
+        break;
+    }
+    case 10: {
+        playerColor = "Green";
+        break;
+    }
+    case 11: {
+        playerColor = "Orange";
+        break;
+    }
+
+    }
+    std::cout << "PlayerColor is: " << playerColor << "\n";
+
+
     
 
     //std::cout << "receiving" << "\n";
@@ -340,21 +384,21 @@ int __cdecl main(int argc, char** argv)
         switch (key) {
         case KEY_UP: {
             //sendMoveMessageToServers(std::string direction, int& playerX, int& playerY, int ID, int& seq_num, SOCKET ConnectSocket, int s, int slen, sockaddr_in client) {
-            sendMoveMessageToServers(std::string("Up"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
+            sendMoveMessageToServers(std::string("Up"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client, playerColor);
         }
         break;
         case KEY_DOWN: {
-            sendMoveMessageToServers(std::string("Down"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
+            sendMoveMessageToServers(std::string("Down"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client, playerColor);
         }
             break;
         case KEY_LEFT: {
             std::cout << "Left" << std::endl;  // key left
-            sendMoveMessageToServers(std::string("Left"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
+            sendMoveMessageToServers(std::string("Left"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client, playerColor);
 
         }
             break;
         case KEY_RIGHT: {
-            sendMoveMessageToServers(std::string("Right"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client);
+            sendMoveMessageToServers(std::string("Right"), playerX, playerY, ID, seq_num, ConnectSocket, s, slen, client, playerColor);
             
         }
         break;
