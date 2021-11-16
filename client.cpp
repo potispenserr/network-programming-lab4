@@ -21,7 +21,8 @@
 #define DEFAULT_BUFLEN 512
 #define DEFAULT_PORT "49152"
 #define DEFAULT_GUI_PORT 4445
-#define SERVERIP "130.240.40.25"
+#define SERVERIP "127.0.0.1"
+#define SSHSERVERIP "130.240.40.25"
 #define GUISERVER "127.0.0.1"
 #define KEY_UP 72
 #define KEY_DOWN 80
@@ -266,7 +267,7 @@ int __cdecl main(int argc, char** argv)
         return 2;
     }
 
-    // setup address structure
+    // setup address structure for UDP
     memset((char*)&client, 0, sizeof(client));
     client.sin_family = AF_INET;
     client.sin_port = htons(DEFAULT_GUI_PORT);
@@ -314,7 +315,14 @@ int __cdecl main(int argc, char** argv)
         return 1;
     }
 
+    std::cout << "Sent join ID: " << join.head.id << "\n";
+    std::cout << "Sent join seq_no: " << join.head.seq_no << "\n";
+    std::cout << "Sent join type: " << join.head.type << "\n";
+    std::cout << "Sent join: " << join.head.length << "\n";
+    std::string sendstring = "no horny *bonk*";
+    std::cout << "Sentstring was " << sendstring << "\n";
     // Send an initial buffer
+    //iResult = send(ConnectSocket, sendstring.c_str(), sizeof(sendstring), 0);
     iResult = send(ConnectSocket, sendbuf, sizeof(sendbuf), 0);
     std::cout << "Message sent was: " << sizeof(sendbuf) << "\n";
     if (iResult == SOCKET_ERROR) {
