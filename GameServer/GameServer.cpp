@@ -48,7 +48,7 @@ std::string deSerialize(char* recvbuf) {
         std::cout << "MsgType was Join" << "\n";
         return std::string("JoinMsg");
         break;
-    case Change:
+    case Change: {
         std::cout << "MsgType was Change" << "\n";
         ChangeMsg* changemsg = (ChangeMsg*)recvbuf;
         std::cout << changemsg->type << "\n";
@@ -71,7 +71,7 @@ std::string deSerialize(char* recvbuf) {
             std::cout << "ID: " << playerleft->msg.head.id << "left" << "\n";
             return std::string("PlayerLeft");
         }
-                        break;
+        break;
 
         case NewPlayerPosition: {
 
@@ -81,15 +81,69 @@ std::string deSerialize(char* recvbuf) {
             std::cout << "playerID: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
             return std::string("NewPlayerPositionMsg");
         }
-                              break;
+        break;
 
         }
+    }
+    case Event: {
+        std::cout << "This message was revealed to be a Event" << "\n";
+        EventMsg* eventmsg = (EventMsg*)recvbuf;
+        std::cout << "After further investigation this turned out to be a " << eventmsg->type << " aka move message" << "\n";
+
+        MoveEvent* moveevent = (MoveEvent*)eventmsg;
+        std::cout << "MoveEvent X: " << moveevent->pos.x << "\n";
+        std::cout << "MoveEvent Y: " << moveevent->pos.y << "\n";
+        return std::string("MoveEvent");
+
+
+        break;
+    }
+    default:
+        std::cout << "Type number " << msghead->type << " doesn't exist" << "\n";
 
     }
     return std::string("Beats me");
 }
 
-int __cdecl main(void)
+void sendInvalidMoveMessage(int ID, int &seq_num, SOCKET ClientSocket, std::vector<int> playerpos, int iResult) {
+
+    NewPlayerPositionMsg newPlayerPosition;
+    newPlayerPosition.msg.type = NewPlayerPosition;
+    newPlayerPosition.msg.head.id = ID;
+    newPlayerPosition.msg.head.seq_no = seq_num;
+    newPlayerPosition.msg.head.type = Change;
+    newPlayerPosition.pos.x = playerpos[0];
+    newPlayerPosition.pos.y = playerpos[1];
+    newPlayerPosition.msg.head.length = sizeof(newPlayerPosition);
+    char sendbuffer[sizeof(newPlayerPosition)];
+
+
+    std::cout << "size of movemsg was " << sizeof(newPlayerPosition) << "\n";
+
+    memcpy((void*)sendbuffer, (void*)&newPlayerPosition, sizeof(newPlayerPosition));
+
+    std::cout << "size of sendbuffer was " << sizeof(sendbuffer) << "\n";
+
+
+    std::cout << "Sending back the same movemsg aka invalid move" << "\n";
+    // Send NewPlayer message
+    int iSendResult = send(ClientSocket, sendbuffer, iResult, 0);
+    if (iSendResult == SOCKET_ERROR) {
+        printf("send failed with error: %d\n", WSAGetLastError());
+        closesocket(ClientSocket);
+        WSACleanup();
+        return;
+    }
+    printf("Bytes sent: %d\n", iSendResult);
+    seq_num++;
+
+}
+
+void serverThread() {
+
+}
+
+int __cdecl main()
 {
     system("title Master server for Twitch plays pixel art");
 
@@ -112,10 +166,12 @@ int __cdecl main(void)
     joinedMsg.seq_no = seq_num;
     char sendbuf[sizeof(joinedMsg)];
     memcpy((void*)sendbuf, (void*)&joinedMsg, sizeof(joinedMsg));
+    std::vector<int> playerpos = { -99,-100 };
 
     int iSendResult;
     char recvbuf[DEFAULT_BUFLEN];
     int recvbuflen = DEFAULT_BUFLEN;
+
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -166,6 +222,7 @@ int __cdecl main(void)
         WSACleanup();
         return 1;
     }
+    std::cout << "Starting server" << "\n";
 
     // Accept a client socket
     ClientSocket = accept(ListenSocket, NULL, NULL);
@@ -207,28 +264,114 @@ int __cdecl main(void)
                 JoinMsg* joinedmsg;
                 joinedmsg = (JoinMsg*)recvbuf;
 
-                NewPlayerMsg newplayermsg;
-                newplayermsg.msg.head.id = ID;
-                newplayermsg.msg.head.seq_no = seq_num;
-                newplayermsg.msg.head.type = Change;
-                newplayermsg.msg.head.length = sizeof(newplayermsg);
+                //NewPlayerMsg newplayermsg;
+                //newplayermsg.msg.head.id = ID;
+                //newplayermsg.msg.head.seq_no = seq_num;
+                //newplayermsg.msg.head.type = Change;
+                //newplayermsg.msg.head.length = sizeof(newplayermsg);
 
-                newplayermsg.msg.type = NewPlayer;
+                //newplayermsg.msg.type = NewPlayer;
                 //newplayermsg.name = joinedmsg->name;
-                char sendbuffer[sizeof(newplayermsg)];
-                memcpy((void*)sendbuffer, (void*)&newplayermsg, sizeof(newplayermsg));
+                //char sendbuffer[sizeof(newplayermsg)];
+                //memcpy((void*)sendbuffer, (void*)&newplayermsg, sizeof(newplayermsg));
 
-                std::cout << "Sending NewPlayerMsg" << "\n";
-                // Send NewPlayer message
-                iSendResult = send(ClientSocket, sendbuffer, iResult, 0);
+                //std::cout << "Sending NewPlayerMsg" << "\n";
+                //// Send NewPlayer message
+                //iSendResult = send(ClientSocket, sendbuffer, iResult, 0);
+                //if (iSendResult == SOCKET_ERROR) {
+                //    printf("send failed with error: %d\n", WSAGetLastError());
+                //    closesocket(ClientSocket);
+                //    WSACleanup();
+                //    return 1;
+                //}
+                //printf("Bytes sent: %d\n", iSendResult);
+                //seq_num++;
+
+            }
+            else if (messageType == "MoveEvent") {
+                MoveEvent* moveevent = (MoveEvent*)recvbuf;
+                if (moveevent->pos.x > 100 || moveevent->pos.x < -100) {
+                    std::cout << "player is going over the edge on X" << "\n";
+                    sendInvalidMoveMessage(ID, seq_num, ClientSocket, playerpos, iResult);
+                    continue;
+                }
+                else if (moveevent->pos.y > 100 || moveevent->pos.y < -100) {
+                    std::cout << "player is going over the edge on Y" << "\n";
+                    //sendInvalidMoveMessage(ID, seq_num, ClientSocket, playerpos);
+                    NewPlayerPositionMsg newPlayerPosition;
+                    newPlayerPosition.msg.type = NewPlayerPosition;
+                    newPlayerPosition.msg.head.id = ID;
+                    newPlayerPosition.msg.head.seq_no = seq_num;
+                    newPlayerPosition.msg.head.type = Change;
+                    newPlayerPosition.pos.x = playerpos[0];
+                    newPlayerPosition.pos.y = playerpos[1];
+                    newPlayerPosition.msg.head.length = sizeof(newPlayerPosition);
+                    char sendbuffer[sizeof(newPlayerPosition)];
+
+
+                    std::cout << "size of movemsg was " << sizeof(newPlayerPosition) << "\n";
+
+                    memcpy((void*)sendbuffer, (void*)&newPlayerPosition, sizeof(newPlayerPosition));
+
+                    std::cout << "size of sendbuffer was " << sizeof(sendbuffer) << "\n";
+
+                    std::cout << "Sending back the same movemsg aka invalid move" << "\n";
+                    // Send NewPlayer message
+                    int iSendResult = send(ClientSocket, sendbuffer, iResult, 0);
+                    if (iSendResult == SOCKET_ERROR) {
+                        printf("send failed with error: %d\n", WSAGetLastError());
+                        closesocket(ClientSocket);
+                        WSACleanup();
+                        return 1;
+                    }
+                    printf("Bytes sent: %d\n", iSendResult);
+                    seq_num++;
+                    continue;
+                
+                }
+                else if (abs(moveevent->pos.x - playerpos[0]) > 1) {
+                    std::cout << "too big jump on X" << "\n";
+                    sendInvalidMoveMessage(ID, seq_num, ClientSocket, playerpos, iResult);
+                    continue;
+                }
+                else if (abs(moveevent->pos.y - playerpos[1]) > 1) {
+                    std::cout << "too big jump on X" << "\n";
+                    sendInvalidMoveMessage(ID, seq_num, ClientSocket, playerpos, iResult);
+                    continue;
+                }
+                std::cout << "This movemsg was valid" << "\n";
+
+                NewPlayerPositionMsg newPlayerPosition;
+                newPlayerPosition.msg.type = NewPlayerPosition;
+                newPlayerPosition.msg.head.id = ID;
+                newPlayerPosition.msg.head.seq_no = seq_num;
+                newPlayerPosition.msg.head.type = Change;
+                newPlayerPosition.pos.x = moveevent->pos.x;
+                newPlayerPosition.pos.y = moveevent->pos.y;
+                newPlayerPosition.msg.head.length = sizeof(newPlayerPosition);
+                char sendbuffer[sizeof(newPlayerPosition)];
+
+                playerpos[0] = moveevent->pos.x;
+                playerpos[1] = moveevent->pos.y;
+
+                std::cout << "size of movemsg was " << sizeof(newPlayerPosition) << "\n";
+
+                memcpy((void*)sendbuffer, (void*)&newPlayerPosition, sizeof(newPlayerPosition));
+
+
+                std::cout << "Sending the new movemsg" << "\n";
+                // Send MoveMsg message
+                int iSendResult = send(ClientSocket, sendbuffer, iResult, 0);
                 if (iSendResult == SOCKET_ERROR) {
                     printf("send failed with error: %d\n", WSAGetLastError());
                     closesocket(ClientSocket);
                     WSACleanup();
-                    return 1;
+                    return 0;
                 }
                 printf("Bytes sent: %d\n", iSendResult);
                 seq_num++;
+
+
 
             }
 

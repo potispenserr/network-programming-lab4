@@ -33,7 +33,7 @@
 int recieveID(SOCKET ConnectSocket) {
     MsgHead* msghead;
     int ID = 0;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 1; i++) {
         std::cout << "starting thread" << "\n";
         char recvbuf[DEFAULT_BUFLEN];
         int iResult;
