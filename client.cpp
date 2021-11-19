@@ -39,7 +39,7 @@ int recieveID(SOCKET ConnectSocket) {
         int iResult;
         int recvbuflen = DEFAULT_BUFLEN;
         iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-        std::cout << "Sizeof recvbuffer: " << sizeof(recvbuf) << "\n";
+        printf("Bytes received: %d\n", iResult);
         msghead = (MsgHead*)recvbuf;
         if (ID == 0) {
             ID = msghead->id;
@@ -154,6 +154,7 @@ void sendMoveMessageToServers(std::string direction, int &playerX, int &playerY,
     memcpy((void*)sendbuffer, (void*)&movemsg, sizeof(movemsg));
 
     int iResult;
+
 
     iResult = send(ConnectSocket, sendbuffer, sizeof(sendbuffer), 0);
     std::cout << "Message sent was: " << sizeof(sendbuffer) << "\n";
