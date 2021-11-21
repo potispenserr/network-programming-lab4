@@ -64,6 +64,11 @@ std::string deSerialize(char* recvbuf) {
         std::cout << "MsgType was Join" << "\n";
         return std::string("JoinMsg");
         break;
+
+    case Leave:
+        std::cout << "MsgType was Leave" << "\n";
+        return std::string("LeaveMsg");
+        break;
     case Change: {
         std::cout << "MsgType was Change" << "\n";
         ChangeMsg* changemsg = (ChangeMsg*)recvbuf;
@@ -170,7 +175,7 @@ struct _clients_b {
 
 };
 
-bool checkCollision(_clients_b clients[], MoveEvent* moveevent, int clients_connected, int socketID) {
+bool checkCollision(std::vector<_clients_b> clients, MoveEvent* moveevent, int clients_connected, int socketID) {
     for (int i = 0; i < clients_connected; i++) {
         if (clients[i].ss == socketID) {
             continue;
@@ -218,7 +223,7 @@ int __cdecl main()
     //std::vector<int> playerpos = { -99,-100 };
     int seq_num = 1;
 
-    _clients_b clients[MAX_CLIENTS];
+    std::vector<_clients_b> clients;
 
     int iSendResult = 0;
     char recvbuf[DEFAULT_BUFLEN];
@@ -299,9 +304,14 @@ int __cdecl main()
         if (client_fd != INVALID_SOCKET) {
 
 
+            _clients_b client;
+
             //save client socket into our struct table
-            clients[clients_connected].ss = client_fd;
-            clients[clients_connected].connected = TRUE;
+            client.ss = client_fd;
+            client.connected = TRUE;
+            client.clientID = nextID;
+
+            clients.push_back(client);
 
             //and of course we need a calculator too
             clients_connected++;
@@ -320,7 +330,7 @@ int __cdecl main()
         if (clients_connected > 0) {
 
             //lets go through all our clients
-            for (int cc = 0; cc < clients_connected; cc++) {
+            for (int cc = 0; cc < clients.size(); cc++) {
 
                 memset(&recvbuf, 0, sizeof(recvbuf));
 
@@ -394,12 +404,12 @@ int __cdecl main()
                         }
                         else if (messageType == "MoveEvent") {
                             MoveEvent* moveevent = (MoveEvent*)recvbuf;
-                            if (moveevent->pos.x > 100 || moveevent->pos.x < -100) {
+                            if (moveevent->pos.x > 99 || moveevent->pos.x < -99) {
                                 std::cout << "player is going over the edge on X" << "\n";
                                 sendInvalidMoveMessage(moveevent->event.head.id, seq_num, clients[cc].ss, clients[cc].playerpos, iResult);
                                 continue;
                             }
-                            else if (moveevent->pos.y > 100 || moveevent->pos.y < -100) {
+                            else if (moveevent->pos.y > 99 || moveevent->pos.y < -99) {
                                 std::cout << "player is going over the edge on Y" << "\n";
                                 sendInvalidMoveMessage(moveevent->event.head.id, seq_num, clients[cc].ss, clients[cc].playerpos, iResult);
                                 //sendInvalidMoveMessage(ID, seq_num, ClientSocket, playerpos);
@@ -473,24 +483,40 @@ int __cdecl main()
 
 
                             std::cout << "Sending the new movemsg to client_fd " << clients[cc].ss << "\n";
-                            // Send MoveMsg message
-                            int iSendResult = send(clients[cc].ss, sendbuffer, sizeof(sendbuffer), 0);
-                            //iSendResult = send(client_fd, sendbuf, sizeof(sendbuf), 0);
-                            if (iSendResult == SOCKET_ERROR) {
-                                printf("send failed with error: %d\n", WSAGetLastError());
-                                closesocket(client_fd);
-                                WSACleanup();
-                                return 0;
+                            // Send MoveMsg message to all connected clients
+                            for (int i = 0; i < clients_connected; i++) {
+                                int iSendResult = send(clients[i].ss, sendbuffer, sizeof(sendbuffer), 0);
+                                //iSendResult = send(client_fd, sendbuf, sizeof(sendbuf), 0);
+                                if (iSendResult == SOCKET_ERROR) {
+                                    printf("send failed with error: %d\n", WSAGetLastError());
+                                    closesocket(client_fd);
+                                    WSACleanup();
+                                    return 0;
+                                }
+                                printf("Bytes sent: %d\n", iSendResult);
+                                seq_num++;
                             }
-                            printf("Bytes sent: %d\n", iSendResult);
-                            seq_num++;
+                            
 
 
 
                         }
+                        else if (messageType == "LeaveMsg") {
+                            nextID--;
+                            std::cout << "ClientID: " << clients[cc].clientID << " or sockID " << clients[cc].ss  << " disconnected." << std::endl;
+                            clients[cc].connected = FALSE;
+                            clients_connected--;
+                            std::cout << "size of clients before removal and shrinking " << clients.size() << "\n";
+                            clients.erase(clients.begin() + cc);
+                            clients.shrink_to_fit();
+                            std::cout << "size of clients after removal and shrinking " << clients.size() << "\n";
+                            std::cout << "Clients left: ";
+                            for (int i = 0; i < clients.size(); i++) {
+                                std::cout << clients[i].ss << " ";
+                            }
+                            std::cout << "\n";
 
-                        /*std::cout << "Client data received: " << recvbuf << std::endl;
-                        send(client_fd, recvbuf, strlen(recvbuf), 0);*/
+                        }
                     }
                     //how to close connection
                     //this just for quick example

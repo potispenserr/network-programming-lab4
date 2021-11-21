@@ -166,44 +166,162 @@ void sendMoveMessageToServers(std::string direction, int &playerX, int &playerY,
     }
     printf("Bytes Sent: %ld\n", iResult);
     seq_num++;
-    std::future<char*> ret = std::async(std::launch::async, recieveOnce, ConnectSocket);
-    char* recievebuffer = ret.get();
-    //std::async(std::launch::async, recieveOnce, ConnectSocket);
-    std::cout << "Pos before deSerialize X: " << playerX << " Y: " << playerY << "\n";
-    std::string messageType = deSerialize(recievebuffer);
-    if (messageType == "NewPlayerPositionMsg") {
+    //std::future<char*> ret = std::async(std::launch::async, recieveOnce, ConnectSocket);
+    //char* recievebuffer = ret.get();
+    ////std::async(std::launch::async, recieveOnce, ConnectSocket);
+    //std::cout << "Pos before deSerialize X: " << playerX << " Y: " << playerY << "\n";
+    //std::string messageType = deSerialize(recievebuffer);
+    //if (messageType == "NewPlayerPositionMsg") {
 
-        //playerY--;
-        NewPlayerPositionMsg* playerpos;
-        std::cout << "It was I NewPlayerPosition" << "\n";
-        playerpos = (NewPlayerPositionMsg*)recievebuffer;
+    //    //playerY--;
+    //    NewPlayerPositionMsg* playerpos;
+    //    std::cout << "It was I NewPlayerPosition" << "\n";
+    //    playerpos = (NewPlayerPositionMsg*)recievebuffer;
 
-        //check if server returned the same coordinates because of invalid move
-        if (playerpos->pos.x == playerX && playerpos->pos.y == playerY) {
-            std::cout << "INVALID MOVE IDIOT" << "\n";
-            return;
-        }
+    //    //check if server returned the same coordinates because of invalid move
+    //    if (playerpos->pos.x == playerX && playerpos->pos.y == playerY) {
+    //        std::cout << "INVALID MOVE IDIOT" << "\n";
+    //        return;
+    //    }
 
-        //if the move was valid
-        playerX = playerpos->pos.x;
-        playerY = playerpos->pos.y;
+    //    //if the move was valid
+    //    playerX = playerpos->pos.x;
+    //    playerY = playerpos->pos.y;
 
-        int newPlayerX = playerpos->pos.x + 100;
-        int newPlayerY = playerpos->pos.y + 100;
+    //    int newPlayerX = playerpos->pos.x + 100;
+    //    int newPlayerY = playerpos->pos.y + 100;
 
-        std::cout << "playerID after deSerialize: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
-        std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + playerColor;
+    //    std::cout << "playerID after deSerialize: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
+    //    std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + playerColor;
 
-        // send the message
-        std::cout << "Message sent was " << message << "\n";
-        if (sendto(s, message.c_str(), strlen(message.c_str()), 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
-        {
-            printf("sendto() failed with error code: %d", WSAGetLastError());
-            return;
-        }
-        message.clear();
-    }
+    //    // send the message
+    //    std::cout << "Message sent was " << message << "\n";
+    //    if (sendto(s, message.c_str(), strlen(message.c_str()), 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
+    //    {
+    //        printf("sendto() failed with error code: %d", WSAGetLastError());
+    //        return;
+    //    }
+    //    message.clear();
+    //}
     
+
+}
+
+std::string getPlayerColorByID(int ID) {
+    std::string playerColor;
+    switch (ID) {
+    case 4: {
+        playerColor = "Magenta";
+        break;
+    }
+    case 5: {
+        playerColor = "Black";
+        break;
+    }
+    case 6: {
+        playerColor = "Blue";
+        break;
+    }
+    case 7: {
+        playerColor = "Yellow";
+        break;
+    }
+    case 8: {
+        playerColor = "Red";
+        break;
+    }
+    case 9: {
+        playerColor = "Cyan";
+        break;
+    }
+    case 10: {
+        playerColor = "Green";
+        break;
+    }
+    case 11: {
+        playerColor = "Orange";
+        break;
+    }
+
+    }
+    std::cout << "PlayerColor is: " << playerColor << "\n";
+    return playerColor;
+
+}
+
+void receiveThreadFunc(SOCKET ConnectSocket, int &playerX, int &playerY, int ID, int s, int slen, sockaddr_in client) {
+
+    /*std::future<char*> ret = std::async(std::launch::async, recieveOnce, ConnectSocket);
+    char* recievebuffer = ret.get();*/
+    std::cout << "starting thread receiveThread" << "\n";
+    bool run = true;
+    while (run) {
+        char recvbuf[DEFAULT_BUFLEN];
+        int iResult;
+        int recvbuflen = DEFAULT_BUFLEN;
+        std::cout << "Receiving..." << "\n";
+        iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+        printf("Bytes received: %d\n", iResult);
+        //std::async(std::launch::async, recieveOnce, ConnectSocket);
+        std::cout << "Pos before deSerialize X: " << playerX << " Y: " << playerY << "\n";
+        std::string messageType = deSerialize(recvbuf);
+        if (messageType == "NewPlayerPositionMsg") {
+
+            //playerY--;
+            NewPlayerPositionMsg* playerpos;
+            std::cout << "It was I NewPlayerPosition" << "\n";
+            playerpos = (NewPlayerPositionMsg*)recvbuf;
+
+            if (playerpos->msg.head.id != ID) {
+                std::cout << "This is a NewPlayerPositionMsg from another player with id: " << playerpos->msg.head.id << "\n";
+                std::string playerColor = getPlayerColorByID(playerpos->msg.head.id);
+
+                int newPlayerX = playerpos->pos.x + 100;
+                int newPlayerY = playerpos->pos.y + 100;
+
+                std::cout << "playerID after deSerialize: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
+                std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + playerColor;
+
+                // send the message
+                std::cout << "Message sent was " << message << "\n";
+                if (sendto(s, message.c_str(), strlen(message.c_str()), 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
+                {
+                    printf("sendto() failed with error code: %d", WSAGetLastError());
+                    return;
+                }
+                message.clear();
+
+            }
+
+            //check if server returned the same coordinates because of invalid move
+            if (playerpos->pos.x == playerX && playerpos->pos.y == playerY) {
+                std::cout << "INVALID MOVE IDIOT" << "\n";
+                continue;
+            }
+
+            //if the move was valid
+            playerX = playerpos->pos.x;
+            playerY = playerpos->pos.y;
+
+            int newPlayerX = playerpos->pos.x + 100;
+            int newPlayerY = playerpos->pos.y + 100;
+
+            std::string playerColor = getPlayerColorByID(playerpos->msg.head.id);
+
+            std::cout << "playerID after deSerialize: " << playerpos->msg.head.id << " newX: " << playerpos->pos.x << " newY: " << playerpos->pos.y << "\n";
+            std::string message = "Action:" + std::to_string(newPlayerX) + ':' + std::to_string(newPlayerY) + ':' + playerColor;
+
+            // send the message
+            std::cout << "Message sent was " << message << "\n";
+            if (sendto(s, message.c_str(), strlen(message.c_str()), 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
+            {
+                printf("sendto() failed with error code: %d", WSAGetLastError());
+                return;
+            }
+            message.clear();
+
+        }
+    }
 
 }
 
@@ -340,42 +458,7 @@ int __cdecl main(int argc, char** argv)
     ID = ret.get();
     std::cout << "ID got from thread is " << ID << "\n";
 
-    switch (ID) {
-    case 4: {
-        playerColor = "Magenta";
-        break;
-        }
-    case 5: {
-        playerColor = "Black";
-        break;
-    }
-    case 6: {
-        playerColor = "Blue";
-        break;
-    }
-    case 7: {
-        playerColor = "Yellow";
-        break;
-    }
-    case 8: {
-        playerColor = "Red";
-        break;
-    }
-    case 9: {
-        playerColor = "Cyan";
-        break;
-    }
-    case 10: {
-        playerColor = "Green";
-        break;
-    }
-    case 11: {
-        playerColor = "Orange";
-        break;
-    }
-
-    }
-    std::cout << "PlayerColor is: " << playerColor << "\n";
+    getPlayerColorByID(ID);
 
 
     
@@ -384,11 +467,15 @@ int __cdecl main(int argc, char** argv)
     // Receive until the peer closes the connection
     MsgHead* msghead;
 
+    std::thread receiveThread(receiveThreadFunc, ConnectSocket, std::ref(playerX), std::ref(playerY), ID, s, slen, client);
+
     int key = 0;
     bool run = true;
     while (run)
     {
         key = _getch();
+
+        std::cout << "key was " << key << "\n";
 
         switch (key) {
         case KEY_UP: {
@@ -438,6 +525,7 @@ int __cdecl main(int argc, char** argv)
                 WSACleanup();
                 return 1;
             }
+            receiveThread.detach();
             run = false;
         }
         break;
