@@ -404,12 +404,12 @@ int __cdecl main()
                         }
                         else if (messageType == "MoveEvent") {
                             MoveEvent* moveevent = (MoveEvent*)recvbuf;
-                            if (moveevent->pos.x > 99 || moveevent->pos.x < -99) {
+                            if (moveevent->pos.x > 100 || moveevent->pos.x < -100) {
                                 std::cout << "player is going over the edge on X" << "\n";
                                 sendInvalidMoveMessage(moveevent->event.head.id, seq_num, clients[cc].ss, clients[cc].playerpos, iResult);
                                 continue;
                             }
-                            else if (moveevent->pos.y > 99 || moveevent->pos.y < -99) {
+                            else if (moveevent->pos.y > 100 || moveevent->pos.y < -100) {
                                 std::cout << "player is going over the edge on Y" << "\n";
                                 sendInvalidMoveMessage(moveevent->event.head.id, seq_num, clients[cc].ss, clients[cc].playerpos, iResult);
                                 //sendInvalidMoveMessage(ID, seq_num, ClientSocket, playerpos);
@@ -515,6 +515,31 @@ int __cdecl main()
                                 std::cout << clients[i].ss << " ";
                             }
                             std::cout << "\n";
+
+                            
+
+                            for (int i = 0; i < clients_connected; i++) {
+                                PlayerLeaveMsg leave;
+                                leave.msg.head.id = clients[i].clientID;
+                                leave.msg.head.type = Change;
+                                leave.msg.head.seq_no = seq_num;
+                                leave.msg.head.length = sizeof(leave);
+                                leave.msg.type = PlayerLeave;
+                                seq_num++;
+                                char sendbuffer[sizeof(leave)];
+                                memcpy((void*)sendbuffer, (void*)&leave, sizeof(leave));
+
+                                int iSendResult = send(clients[i].ss, sendbuffer, sizeof(sendbuffer), 0);
+                                //iSendResult = send(client_fd, sendbuf, sizeof(sendbuf), 0);
+                                if (iSendResult == SOCKET_ERROR) {
+                                    printf("send failed with error: %d\n", WSAGetLastError());
+                                    closesocket(client_fd);
+                                    WSACleanup();
+                                    return 0;
+                                }
+                                printf("Bytes sent: %d\n", iSendResult);
+                                seq_num++;
+                            }
 
                         }
                     }

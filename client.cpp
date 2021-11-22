@@ -99,7 +99,7 @@ std::string deSerialize(char* recvbuf) {
             std::cout << "After consooming the red pill this message was revealed to be PlayerLeave" << "\n";
             playerleft = (PlayerLeaveMsg*)changemsg;
             std::cout << "ID: " << playerleft->msg.head.id << "left" << "\n";
-            return std::string("PlayerLeft");
+            return std::string("PlayerLeaveMsg");
         }
         break;
 
@@ -321,6 +321,24 @@ void receiveThreadFunc(SOCKET ConnectSocket, int &playerX, int &playerY, int ID,
             message.clear();
 
         }
+        else if (messageType == "PlayerLeaveMsg") {
+            PlayerLeaveMsg* playerleave;
+            playerleave = (PlayerLeaveMsg*)recvbuf;
+            std::cout << "PlayerID " << playerleave->msg.head.id << "has left" << "\n";
+
+            std::string playerColor = getPlayerColorByID(playerleave->msg.head.id);
+
+            std::string message = "Leave:" + std::to_string('-1') + ':' + std::to_string('-1') + ':' + playerColor;
+
+            // send the message
+            std::cout << "Message sent was " << message << "\n";
+            if (sendto(s, message.c_str(), strlen(message.c_str()), 0, (struct sockaddr*)&client, slen) == SOCKET_ERROR)
+            {
+                printf("sendto() failed with error code: %d", WSAGetLastError());
+                return;
+            }
+            message.clear();
+        }
     }
 
 }
@@ -438,8 +456,6 @@ int __cdecl main(int argc, char** argv)
     std::cout << "Sent join seq_no: " << join.head.seq_no << "\n";
     std::cout << "Sent join type: " << join.head.type << "\n";
     std::cout << "Sent join: " << join.head.length << "\n";
-    std::string sendstring = "no horny *bonk*";
-    std::cout << "Sentstring was " << sendstring << "\n";
     // Send an initial buffer
     //iResult = send(ConnectSocket, sendstring.c_str(), sizeof(sendstring), 0);
     iResult = send(ConnectSocket, sendbuf, sizeof(sendbuf), 0);
